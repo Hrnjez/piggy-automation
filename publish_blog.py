@@ -30,23 +30,23 @@ def generate_blog_content():
     
     prompt = f"""
     {context}
-    Write a blog post about: {angle}
+    Write a high-quality blog post about: {angle}
     Return ONLY a JSON object:
     {{
       "title": "catchy title",
       "summary": "1-2 sentence summary",
-      "html_content": "<h3>Headline</h3><p>Paragraph about Piggybank...</p>",
-      "category": "{category}",
-      "featured": false
+      "html_content": "<h3>Headline</h3><p>Detailed paragraph about Piggybank...</p>",
+      "category": "{category}"
     }}
-    Do not use markdown code blocks.
+    Do not use markdown code blocks like ```json.
     """
     
     response = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]})
     
     if response.status_code == 200:
         raw_text = response.json()['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(raw_text.replace('```json', '').replace('```', '').strip())
+        cleaned_text = raw_text.replace('```json', '').replace('```', '').strip()
+        return json.loads(cleaned_text)
     else:
         raise Exception(f"Gemini Error: {response.text}")
 
@@ -64,16 +64,16 @@ def post_to_webflow(data):
             "post-body": data['html_content'],
             "post-summary": data['summary'],
             "category": data['category'],
-            "featured": data['featured'],
+            "featured": False,   # ALWAYS OFF
             "_archived": False,
-            "_draft": False
+            "_draft": False      # ALWAYS LIVE
         }
     }
     
-    print(f"Posting to Webflow...")
+    print(f"Posting Live to Webflow...")
     res = requests.post(url, json=payload, headers=headers)
     if res.status_code in [200, 201, 202]:
-        print(f"Success! {data['title']} is now in Webflow.")
+        print(f"Success! {data['title']} is now LIVE on Webflow.")
     else:
         print(f"Webflow Error: {res.text}")
 
