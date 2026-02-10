@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import random  # Added for variety
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load keys
@@ -12,28 +12,15 @@ WEBFLOW_TOKEN = os.getenv("WEBFLOW_API_TOKEN")
 COLLECTION_ID = os.getenv("WEBFLOW_COLLECTION_ID")
 
 def generate_blog_content():
-    # Define the possible categories and their specific writing angles
-    options = [
-        {
-            "category": "Product", 
-            "angle": "Focus on Piggybank's features, the mini-app UI, and how to use it."
-        },
-        {
-            "category": "Economy", 
-            "angle": "Focus on Web3 rewards, on-chain incentives, and the Propaganda economy."
-        },
-        {
-            "category": "Ecosystem", 
-            "angle": "Focus on the Farcaster/Zora community and why Piggybank is the future of social apps."
-        }
-    ]
-    
-    # Pick one at random
-    selection = random.choice(options)
-    category = selection["category"]
-    angle = selection["angle"]
+    hour = datetime.utcnow().hour
+    if hour < 10:
+        category, angle = "Product", "Focus on Piggybank's features, the mini-app UI, and how to use it."
+    elif hour < 16:
+        category, angle = "Economy", "Focus on Web3 rewards, on-chain incentives, and the Propaganda economy."
+    else:
+        category, angle = "Ecosystem", "Focus on the Farcaster/Zora community and why Piggybank is the future of social apps."
 
-    print(f"Generating a {category} post...")
+    print(f"Generating {category} post...")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
     context = "Piggybank is a Web3 mini-app by 'Propaganda'. It lives on Farcaster and Zora. It's about on-chain social interactions."
@@ -41,7 +28,7 @@ def generate_blog_content():
     prompt = f"""
     {context}
     Write a high-quality blog post about: {angle}
-    Return ONLY a JSON object with these exact keys:
+    Return ONLY a JSON object:
     {{
       "title": "catchy title",
       "summary": "1-2 sentence summary",
@@ -55,16 +42,12 @@ def generate_blog_content():
     
     if response.status_code == 200:
         raw_text = response.json()['candidates'][0]['content']['parts'][0]['text']
-        cleaned_text = raw_text.replace('```json', '').replace('```', '').strip()
-        data = json.loads(cleaned_text)
-        
-        # Force the category to match our selection just in case Gemini hallucinates
-        data['category'] = category
-        return data
+        return json.loads(raw_text.replace('```json', '').replace('```', '').strip())
     else:
         raise Exception(f"Gemini Error: {response.text}")
 
 def post_to_webflow(data):
+    # CRITICAL CHANGE: We added '/live' to the end of the URL
     url = f"https://api.webflow.com/v2/collections/{COLLECTION_ID}/items/live"
     
     headers = {
@@ -81,15 +64,15 @@ def post_to_webflow(data):
             "post-body": data['html_content'],
             "post-summary": data['summary'],
             "category": data['category'],
-            "featured": False 
+            "featured": False # Featured toggle OFF as requested
         }
     }
     
-    print(f"Publishing LIVE to Webflow: {data['title']} ({data['category']})")
+    print(f"Publishing LIVE to Webflow via /live endpoint...")
     res = requests.post(url, json=payload, headers=headers)
     
     if res.status_code in [200, 201, 202]:
-        print(f"Success! Item is now LIVE.")
+        print(f"Success! '{data['title']}' is now LIVE on your site.")
     else:
         print(f"Webflow Error: {res.text}")
 
