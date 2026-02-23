@@ -2,7 +2,7 @@ name: 3x Daily Blog Post
 
 on:
   schedule:
-    # This runs at 08:00, 14:00, and 20:00 UTC every day
+    # This Runs at 00:00, 04:00, 08:00, 12:00, 16:00 and 20:00
     - cron: '0 0,4,8,12,16,20 * * *'
   workflow_dispatch: # This adds a "Run Now" button for testing
 
