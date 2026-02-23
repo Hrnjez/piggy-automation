@@ -1,7 +1,6 @@
 import os
 import requests
 import json
-import random
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -11,23 +10,24 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 WEBFLOW_TOKEN = os.getenv("WEBFLOW_API_TOKEN")
 COLLECTION_ID = os.getenv("WEBFLOW_COLLECTION_ID")
 
-# ─────────────────────────────────────────────
-# CONTENT STRATEGY CONFIG
-# Based on Piggy Blog Content Strategy v2
-# ─────────────────────────────────────────────
+BRAND_CONTEXT = (
+    "Piggy (piggysave.app) is a personal finance brand - think mini-NerdWallet but written like a smart friend texting you advice. "
+    "The blog is a personal finance destination that stands on its own before the app launches. "
+    "Tone: Warm, opinionated, accessible. No jargon without explanation. 8th-grade reading level. Recommend specific products/actions - no 'it depends' hedging. "
+    "Positioning: The finance site that does not make you feel dumb. "
+    "Do NOT mention Web3, Farcaster, Zora, or the old Propaganda/Piggybank product. "
+    "Always end articles with: <p><em>This is educational content, not financial advice.</em></p>"
+)
 
-BRAND_CONTEXT = """
-Piggy (piggysave.app) is a personal finance brand — think mini-NerdWallet but written like a smart friend texting you advice.
-The blog is a personal finance destination that stands on its own before the app launches.
-Tone: Warm, opinionated, accessible. No jargon without explanation. 8th-grade reading level. Recommend specific products/actions — no "it depends" hedging.
-Positioning: "The finance site that doesn't make you feel dumb."
-Do NOT mention Web3, Farcaster, Zora, or the old Propaganda/Piggybank product.
-Always end articles with: <p><em>This is educational content, not financial advice.</em></p>
-"""
+SYSTEM_PROMPT = (
+    "You are a world-class personal finance writer for Piggy (piggysave.app). "
+    "Your style: warm, direct, opinionated, accessible. Like a knowledgeable friend, not a textbook. "
+    "You write at an 8th-grade reading level. You recommend specific products and give real answers. "
+    "You never say 'it depends on your situation' without following it with an actual decision framework. "
+    "Never use passive voice where active works. Never pad content with filler sentences."
+)
 
-# Format templates mapped by category
 CONTENT_POOL = [
-    # SAVE
     {
         "category": "Save",
         "title_template": "How to Save $10,000 in a Year: The Plan That Actually Works",
@@ -60,7 +60,6 @@ CONTENT_POOL = [
         "word_count": "1200-1800",
         "angle": "Contrarian take that budgets fail because willpower is finite. Automation blueprint: split accounts, auto-transfers, specific apps (Ally, Marcus, Fidelity)."
     },
-    # INVEST
     {
         "category": "Invest",
         "title_template": "Should You Invest in Bitcoin in [YEAR]? Here's What to Know",
@@ -83,9 +82,8 @@ CONTENT_POOL = [
         "keyword": "build wealth in your 20s",
         "format": "Complete Guide",
         "word_count": "2500-3500",
-        "angle": "Priority order: emergency fund → 401k match → HYSA → Roth IRA → brokerage. Specific action items for each income level."
+        "angle": "Priority order: emergency fund, 401k match, HYSA, Roth IRA, brokerage. Specific action items for each income level."
     },
-    # SPEND SMART
     {
         "category": "Spend Smart",
         "title_template": "The 30% Rent Rule: Does It Still Work in [YEAR]? (Honest Answer: Barely)",
@@ -110,7 +108,6 @@ CONTENT_POOL = [
         "word_count": "1000-1500",
         "angle": "Step-by-step audit process, specific apps to find subscriptions (Rocket Money, Trim), decision framework for what to keep/cut."
     },
-    # TOOLS & REVIEWS
     {
         "category": "Tools & Reviews",
         "title_template": "Best High-Yield Savings Accounts: [MONTH] [YEAR] (Rates Updated)",
@@ -127,7 +124,6 @@ CONTENT_POOL = [
         "word_count": "1500-2000",
         "angle": "Top 5 apps compared (Robinhood, Fidelity, Schwab, Webull, SoFi Invest) with a clear recommendation and who each suits best."
     },
-    # MONEY 101
     {
         "category": "Money 101",
         "title_template": "What Is Compound Interest? (The Explainer That Actually Makes Sense)",
@@ -150,9 +146,8 @@ CONTENT_POOL = [
         "keyword": "saving vs investing",
         "format": "A vs B",
         "word_count": "1200-1800",
-        "angle": "Clear framework: save for goals <5 years, invest for goals >5 years. Emergency fund first. Specific product picks for each path."
+        "angle": "Clear framework: save for goals under 5 years, invest for goals over 5 years. Emergency fund first. Specific product picks for each path."
     },
-    # TAXES (Trending)
     {
         "category": "Taxes",
         "title_template": "Trump Accounts Explained: The New $1,000 Savings Account for Kids (2026 Guide)",
@@ -167,9 +162,8 @@ CONTENT_POOL = [
         "keyword": "what to do with tax refund",
         "format": "What to Do With",
         "word_count": "1200-1800",
-        "angle": "Ranked priority list: emergency fund → high-interest debt → IRA contribution → HYSA → invest. Opinionated, specific."
+        "angle": "Ranked priority list: emergency fund, high-interest debt, IRA contribution, HYSA, invest. Opinionated, specific."
     },
-    # EARN
     {
         "category": "Earn",
         "title_template": "5 Realistic Side Hustles That Actually Pay in [YEAR]",
@@ -180,106 +174,50 @@ CONTENT_POOL = [
     },
 ]
 
-SYSTEM_PROMPT = """You are a world-class personal finance writer for Piggy (piggysave.app).
-Your style: warm, direct, opinionated, accessible. Like a knowledgeable friend, not a textbook.
-You write at an 8th-grade reading level. You recommend specific products and give real answers.
-You never say "it depends on your situation" without following it with an actual decision framework.
-Never use passive voice where active works. Never pad content with filler sentences."""
-
 
 def pick_article():
-    """Pick an article from the content pool, rotating by hour of day."""
-    hour = datetime.utcnow().hour
-    idx = (datetime.utcnow().timetuple().tm_yday + hour) % len(CONTENT_POOL)
+    idx = (datetime.utcnow().timetuple().tm_yday + datetime.utcnow().hour) % len(CONTENT_POOL)
     return CONTENT_POOL[idx]
 
 
-def build_prompt(article: dict) -> str:
+def build_prompt(article):
     year = datetime.utcnow().year
     month = datetime.utcnow().strftime("%B")
     title = article["title_template"].replace("[YEAR]", str(year)).replace("[MONTH]", month)
 
     format_instructions = {
-        "Complete Guide": """
-Structure:
-- H2: What Is [Topic]? (plain English, 1-2 paragraphs)
-- H2: Why It Matters Right Now
-- H2: Step-by-Step Guide (H3 for each step)
-- H2: Common Mistakes (3-5, each with a fix)
-- H2: Best Tools and Apps (specific recommendations with honest pros/cons)
-- H2: FAQ (5-6 questions)
-- H2: The Bottom Line (1 paragraph + one concrete action)""",
-        "Should You Invest": """
-Structure:
-- H2: What Is [Asset]? (quick explainer)
-- H2: Historical Performance (honest, with context)
-- H2: Pros of Investing
-- H2: Risks and Downsides (be honest)
-- H2: How to Actually Buy It (step-by-step)
-- H2: How Much Should You Invest? (% allocation by risk profile)
-- H2: [Asset] vs. Alternatives (comparison)
-- H2: Who This Is (and Isn't) For
-- H2: FAQ""",
-        "Best Products": """
-Structure:
-- Opening: What we looked for and how we evaluated
-- H2 for each product: Name, rating, best for, pros, cons, our take
-- H2: How to Choose (decision matrix)
-- H2: FAQ""",
-        "Financial Rules": """
-Structure:
-- H2: What the Rule Says
-- H2: Where It Came From
-- H2: Does It Still Work? (honest assessment with data)
-- H2: When to Break the Rule
-- H2: A Better Framework
-- H2: FAQ""",
-        "A vs B": """
-Structure:
-- H2: Quick Summary (decision table)
-- H2: What Is [A]?
-- H2: What Is [B]?
-- H2: Key Differences (comparison table in HTML)
-- H2: When to Choose [A]
-- H2: When to Choose [B]
-- H2: The Bottom Line (clear recommendation)""",
+        "Complete Guide": "Structure: H2 What Is [Topic], H2 Why It Matters, H2 Step-by-Step Guide with H3 steps, H2 Common Mistakes, H2 Best Tools and Apps, H2 FAQ, H2 The Bottom Line.",
+        "Should You Invest": "Structure: H2 What Is [Asset], H2 Historical Performance, H2 Pros, H2 Risks and Downsides, H2 How to Buy It, H2 How Much to Invest, H2 Alternatives Comparison, H2 Who This Is For, H2 FAQ.",
+        "Best Products": "Structure: Opening on evaluation criteria, H2 for each product with pros/cons/our take, H2 How to Choose, H2 FAQ.",
+        "Financial Rules": "Structure: H2 What the Rule Says, H2 Where It Came From, H2 Does It Still Work, H2 When to Break the Rule, H2 A Better Framework, H2 FAQ.",
+        "A vs B": "Structure: H2 Quick Summary with decision table, H2 What Is A, H2 What Is B, H2 Key Differences with HTML table, H2 When to Choose A, H2 When to Choose B, H2 The Bottom Line.",
     }
 
     structure = format_instructions.get(article["format"], "Use clear H2/H3 headings with detailed paragraphs under each.")
 
-    return f"""
-{BRAND_CONTEXT}
-
-Write a blog post for Piggy (piggysave.app).
-
-TITLE: {title}
-CATEGORY: {article['category']}
-FORMAT: {article['format']}
-TARGET KEYWORD: {article['keyword']}
-WORD COUNT TARGET: {article['word_count']} words
-ANGLE: {article['angle']}
-
-STRUCTURE TO FOLLOW:
-{structure}
-
-Start with a hook: a surprising stat, a relatable scenario, or a provocative statement. 
-Do not write a boring "In today's article..." intro.
-
-Return ONLY a valid JSON object (no markdown, no code fences):
-{{
-  "title": "{title}",
-  "summary": "1-2 sentence meta description optimized for the keyword",
-  "html_content": "<h2>...</h2><p>...</p>... (full article HTML)",
-  "category": "{article['category']}"
-}}
-"""
+    prompt = (
+        BRAND_CONTEXT + "\n\n"
+        "Write a blog post for Piggy (piggysave.app).\n\n"
+        "TITLE: " + title + "\n"
+        "CATEGORY: " + article["category"] + "\n"
+        "FORMAT: " + article["format"] + "\n"
+        "TARGET KEYWORD: " + article["keyword"] + "\n"
+        "WORD COUNT TARGET: " + article["word_count"] + " words\n"
+        "ANGLE: " + article["angle"] + "\n\n"
+        "STRUCTURE TO FOLLOW:\n" + structure + "\n\n"
+        "Start with a hook: a surprising stat, a relatable scenario, or a provocative statement.\n"
+        "Do not write a boring 'In today's article...' intro.\n\n"
+        "Return ONLY a valid JSON object with no markdown and no code fences:\n"
+        '{"title": "' + title + '", "summary": "1-2 sentence meta description", "html_content": "<h2>...</h2><p>...</p>", "category": "' + article["category"] + '"}'
+    )
+    return prompt
 
 
 def generate_blog_content():
     article = pick_article()
-    print(f"Generating: [{article['category']}] {article['title_template'][:60]}...")
+    print("Generating: [" + article["category"] + "] " + article["title_template"][:60] + "...")
 
-url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + GEMINI_KEY
 
     response = requests.post(
         url,
@@ -291,19 +229,18 @@ url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lat
     )
 
     if response.status_code == 200:
-        raw_text = response.json()['candidates'][0]['content']['parts'][0]['text']
-        # Strip any accidental markdown fences
-        clean = raw_text.replace('```json', '').replace('```', '').strip()
+        raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        clean = raw_text.replace("```json", "").replace("```", "").strip()
         return json.loads(clean)
     else:
-        raise Exception(f"Gemini Error: {response.status_code} — {response.text}")
+        raise Exception("Gemini Error: " + str(response.status_code) + " - " + response.text)
 
 
 def post_to_webflow(data):
-    url = f"https://api.webflow.com/v2/collections/{COLLECTION_ID}/items/live"
+    url = "https://api.webflow.com/v2/collections/" + COLLECTION_ID + "/items/live"
 
     headers = {
-        "Authorization": f"Bearer {WEBFLOW_TOKEN}",
+        "Authorization": "Bearer " + WEBFLOW_TOKEN,
         "accept-version": "2.0.0",
         "content-type": "application/json"
     }
@@ -312,21 +249,21 @@ def post_to_webflow(data):
         "isArchived": False,
         "isDraft": False,
         "fieldData": {
-            "name": data['title'],
-            "post-body": data['html_content'],
-            "post-summary": data['summary'],
-            "category": data['category'],
+            "name": data["title"],
+            "post-body": data["html_content"],
+            "post-summary": data["summary"],
+            "category": data["category"],
             "featured": False
         }
     }
 
-    print(f"Publishing to Webflow: '{data['title']}'...")
+    print("Publishing to Webflow: " + data["title"] + "...")
     res = requests.post(url, json=payload, headers=headers)
 
     if res.status_code in [200, 201, 202]:
-        print(f"✅ Success! '{data['title']}' is now LIVE.")
+        print("Success! " + data["title"] + " is now LIVE.")
     else:
-        raise Exception(f"Webflow Error: {res.status_code} — {res.text}")
+        raise Exception("Webflow Error: " + str(res.status_code) + " - " + res.text)
 
 
 if __name__ == "__main__":
@@ -334,5 +271,5 @@ if __name__ == "__main__":
         content = generate_blog_content()
         post_to_webflow(content)
     except Exception as e:
-        print(f"❌ Failed: {e}")
+        print("Failed: " + str(e))
         raise
