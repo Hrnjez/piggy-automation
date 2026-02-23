@@ -214,26 +214,37 @@ def build_prompt(article):
 
 
 def generate_blog_content():
+    import time
     article = pick_article()
     print("Generating: [" + article["category"] + "] " + article["title_template"][:60] + "...")
 
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + GEMINI_KEY
 
-    response = requests.post(
-        url,
-        json={
-            "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-            "contents": [{"parts": [{"text": build_prompt(article)}]}],
-            "generationConfig": {"temperature": 0.8, "maxOutputTokens": 8192}
-        }
-    )
+    max_retries = 4
+    wait_seconds = 30
 
-    if response.status_code == 200:
-        raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        clean = raw_text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean)
-    else:
-        raise Exception("Gemini Error: " + str(response.status_code) + " - " + response.text)
+    for attempt in range(1, max_retries + 1):
+        response = requests.post(
+            url,
+            json={
+                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "contents": [{"parts": [{"text": build_prompt(article)}]}],
+                "generationConfig": {"temperature": 0.8, "maxOutputTokens": 8192}
+            }
+        )
+
+        if response.status_code == 200:
+            raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            clean = raw_text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean)
+        elif response.status_code in [503, 429]:
+            if attempt < max_retries:
+                print("Gemini busy (attempt " + str(attempt) + "), retrying in " + str(wait_seconds) + "s...")
+                time.sleep(wait_seconds)
+            else:
+                raise Exception("Gemini Error after " + str(max_retries) + " attempts: " + str(response.status_code) + " - " + response.text)
+        else:
+            raise Exception("Gemini Error: " + str(response.status_code) + " - " + response.text)
 
 
 def post_to_webflow(data):
