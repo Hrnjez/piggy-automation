@@ -279,7 +279,7 @@ def generate_blog_content():
     article = pick_article()
     print(f"Generating: [{article['category']}] {article['title_template'][:60]}...")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_KEY}"
+   url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
 
     response = requests.post(
         url,
