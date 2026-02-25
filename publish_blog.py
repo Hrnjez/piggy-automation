@@ -180,7 +180,8 @@ CONTENT_POOL = [
 def load_published():
     if os.path.exists(PUBLISHED_LOG):
         with open(PUBLISHED_LOG, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            return [int(x) for x in data]  # fix: osiguraj da su brojevi, ne stringovi
     return []
 
 
@@ -190,7 +191,9 @@ def save_published(published_list):
 
 
 def pick_article():
-    published = load_published()
+      published = load_published()
+        print(f"DEBUG - Objavljeni indeksi: {published}")
+        print(f"DEBUG - Ukupno artikala u poolu: {len(CONTENT_POOL)}")
 
     if len(published) >= len(CONTENT_POOL):
         print("Svi artikli objavljeni, resetujem log...")
