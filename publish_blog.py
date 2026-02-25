@@ -191,9 +191,9 @@ def save_published(published_list):
 
 
 def pick_article():
-      published = load_published()
-        print(f"DEBUG - Objavljeni indeksi: {published}")
-        print(f"DEBUG - Ukupno artikala u poolu: {len(CONTENT_POOL)}")
+    published = load_published()
+    print(f"DEBUG - Objavljeni indeksi: {published}")
+    print(f"DEBUG - Ukupno artikala u poolu: {len(CONTENT_POOL)}")
 
     if len(published) >= len(CONTENT_POOL):
         print("Svi artikli objavljeni, resetujem log...")
