@@ -1,20 +1,97 @@
 [
-  {"title": "What to Do With Your Tax Refund in 2026 (5 Moves That Actually Build Wealth)", "category": "Taxes", "date": "2026-02-25"},
-  {"title": "Trump Accounts Explained: The New $1,000 Savings Account for Kids (2026 Guide)", "category": "Taxes", "date": "2026-02-25"},
-  {"title": "Saving vs. Investing: When to Do Which (The Decision Framework)", "category": "Money 101", "date": "2026-02-25"},
-  {"title": "What Is Compound Interest? (The Explainer That Actually Makes Sense)", "category": "Money 101", "date": "2026-02-25"},
-  {"title": "How to Save $10,000 in a Year: The Plan That Actually Works", "category": "Save", "date": "2026-02-25"},
-  {"title": "Best High-Yield Savings Accounts: February 2026 (Rates Updated)", "category": "Tools & Reviews", "date": "2026-02-25"},
-  {"title": "The 50/30/20 Rule Explained: A Budget Framework That Actually Works", "category": "Spend Smart", "date": "2026-02-25"},
-  {"title": "How to Build Wealth in Your 20s: The Playbook No One Gave You", "category": "Invest", "date": "2026-02-24"},
-  {"title": "Stop Budgeting. Automate Your Money Instead. (Here's How)", "category": "Save", "date": "2026-02-24"},
-  {"title": "5 Realistic Side Hustles That Actually Pay in 2026", "category": "Earn", "date": "2026-02-24"},
-  {"title": "Roth IRA vs. Traditional IRA: The 5-Minute Guide to Picking the Right One", "category": "Money 101", "date": "2026-02-24"},
-  {"title": "Best Stock Trading Apps for Beginners in 2026 (We'd Pick Robinhood)", "category": "Tools & Reviews", "date": "2026-02-24"},
-  {"title": "The Subscription Audit: How to Find and Cancel the $273/Month You Forgot About", "category": "Spend Smart", "date": "2026-02-24"},
-  {"title": "The 30% Rent Rule: Does It Still Work in 2026? (Honest Answer: Barely)", "category": "Spend Smart", "date": "2026-02-24"},
-  {"title": "How to Start Investing in Stocks: A Beginner's Guide for 2026", "category": "Invest", "date": "2026-02-23"},
-  {"title": "Should You Invest in Bitcoin in 2026? Here's What to Know", "category": "Invest", "date": "2026-02-23"},
-  {"title": "How Much Should You Have Saved by 30? (Real Numbers, Not Fantasy)", "category": "Save", "date": "2026-02-23"},
-  {"title": "The 52-Week Savings Challenge: Complete Guide for 2026", "category": "Save", "date": "2026-02-23"}
+  {
+    "title": "What to Do With Your Tax Refund in 2026 (5 Moves That Actually Build Wealth)",
+    "category": "Taxes",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "Trump Accounts Explained: The New $1,000 Savings Account for Kids (2026 Guide)",
+    "category": "Taxes",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "Saving vs. Investing: When to Do Which (The Decision Framework)",
+    "category": "Money 101",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "What Is Compound Interest? (The Explainer That Actually Makes Sense)",
+    "category": "Money 101",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "How to Save $10,000 in a Year: The Plan That Actually Works",
+    "category": "Save",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "Best High-Yield Savings Accounts: February 2026 (Rates Updated)",
+    "category": "Tools & Reviews",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "The 50/30/20 Rule Explained: A Budget Framework That Actually Works",
+    "category": "Spend Smart",
+    "date": "2026-02-25"
+  },
+  {
+    "title": "How to Build Wealth in Your 20s: The Playbook No One Gave You",
+    "category": "Invest",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "Stop Budgeting. Automate Your Money Instead. (Here's How)",
+    "category": "Save",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "5 Realistic Side Hustles That Actually Pay in 2026",
+    "category": "Earn",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "Roth IRA vs. Traditional IRA: The 5-Minute Guide to Picking the Right One",
+    "category": "Money 101",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "Best Stock Trading Apps for Beginners in 2026 (We'd Pick Robinhood)",
+    "category": "Tools & Reviews",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "The Subscription Audit: How to Find and Cancel the $273/Month You Forgot About",
+    "category": "Spend Smart",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "The 30% Rent Rule: Does It Still Work in 2026? (Honest Answer: Barely)",
+    "category": "Spend Smart",
+    "date": "2026-02-24"
+  },
+  {
+    "title": "How to Start Investing in Stocks: A Beginner's Guide for 2026",
+    "category": "Invest",
+    "date": "2026-02-23"
+  },
+  {
+    "title": "Should You Invest in Bitcoin in 2026? Here's What to Know",
+    "category": "Invest",
+    "date": "2026-02-23"
+  },
+  {
+    "title": "How Much Should You Have Saved by 30? (Real Numbers, Not Fantasy)",
+    "category": "Save",
+    "date": "2026-02-23"
+  },
+  {
+    "title": "The 52-Week Savings Challenge: Complete Guide for 2026",
+    "category": "Save",
+    "date": "2026-02-23"
+  },
+  {
+    "title": "The Art of the 20% Raise: How to Negotiate Your Salary in 2026",
+    "category": "Earn",
+    "date": "2026-02-26"
+  }
 ]
