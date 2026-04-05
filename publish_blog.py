@@ -1,8 +1,12 @@
 import os
-import requests
+import re
+import time
 import json
+import requests
+import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
+from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
@@ -10,6 +14,7 @@ WEBFLOW_TOKEN = os.getenv("WEBFLOW_API_TOKEN")
 COLLECTION_ID = os.getenv("WEBFLOW_COLLECTION_ID")
 
 PUBLISHED_LOG = "published_articles.json"
+EMBEDDINGS_LOG = "published_embeddings.json"
 
 BRAND_CONTEXT = (
     "Piggy (piggysave.app) is a personal finance brand - think mini-NerdWallet but written like a smart friend texting you advice. "
@@ -38,6 +43,11 @@ CATEGORIES = [
     "Earn",
 ]
 
+SIMILARITY_THRESHOLD = 0.85
+MAX_GEN_ATTEMPTS = 5
+
+
+# ─── Published log ────────────────────────────────────────────────────────────
 
 def load_published():
     if os.path.exists(PUBLISHED_LOG):
@@ -51,46 +61,89 @@ def save_published(published_list):
         json.dump(published_list, f, indent=2)
 
 
-def pick_category(published_titles):
-    # Rotate through categories evenly based on how many times each has been used
-    # Count how many published titles belong to each category (we store category too)
-    # Since we only stored titles before, just rotate by count
+# ─── Embeddings ───────────────────────────────────────────────────────────────
+
+def load_embeddings():
+    if os.path.exists(EMBEDDINGS_LOG):
+        with open(EMBEDDINGS_LOG, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_embedding(title, vector):
+    embeddings = load_embeddings()
+    embeddings[title] = vector
+    with open(EMBEDDINGS_LOG, "w") as f:
+        json.dump(embeddings, f)
+
+
+def get_embedding(text):
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"text-embedding-004:embedContent?key={GEMINI_KEY}"
+    )
+    response = requests.post(
+        url,
+        json={"model": "models/text-embedding-004", "content": {"parts": [{"text": text}]}}
+    )
+    if response.status_code == 200:
+        return response.json()["embedding"]["values"]
+    raise Exception(f"Embedding error: {response.status_code} - {response.text}")
+
+
+def is_too_similar(new_title, threshold=SIMILARITY_THRESHOLD):
+    embeddings = load_embeddings()
+    if not embeddings:
+        return False, None
+
+    new_vec = np.array(get_embedding(new_title)).reshape(1, -1)
+    existing_titles = list(embeddings.keys())
+    existing_vecs = np.array([embeddings[t] for t in existing_titles])
+
+    similarities = cosine_similarity(new_vec, existing_vecs)[0]
+    max_idx = int(np.argmax(similarities))
+    max_sim = similarities[max_idx]
+
+    if max_sim > threshold:
+        return True, existing_titles[max_idx]
+    return False, None
+
+
+# ─── Category picker ──────────────────────────────────────────────────────────
+
+def pick_category(published_list):
     counts = {cat: 0 for cat in CATEGORIES}
-    for entry in published_titles:
+    for entry in published_list:
         if isinstance(entry, dict) and "category" in entry:
             cat = entry["category"]
             if cat in counts:
                 counts[cat] += 1
-    # Pick the category with fewest posts
     return min(counts, key=counts.get)
 
 
-def generate_topic_and_content(published_titles):
-    import time
+# ─── Content generation ───────────────────────────────────────────────────────
 
+def generate_topic_and_content(published_list):
     year = datetime.utcnow().year
     month = datetime.utcnow().strftime("%B")
+    category = pick_category(published_list)
 
-    category = pick_category(published_titles)
-
-    # Build list of already published titles to avoid repetition
-    already_published = []
-    for entry in published_titles:
-        if isinstance(entry, dict):
-            already_published.append(entry["title"])
-        elif isinstance(entry, str):
-            already_published.append(entry)
-
-    already_published_str = "\n".join(f"- {t}" for t in already_published) if already_published else "None yet."
+    # Send only the last 80 titles to stay within token limits
+    recent_entries = published_list[-80:]
+    recent_titles = [
+        e["title"] if isinstance(e, dict) else e
+        for e in recent_entries
+    ]
+    already_published_str = "\n".join(f"- {t}" for t in recent_titles) or "None yet."
 
     topic_prompt = (
         BRAND_CONTEXT + "\n\n"
         f"Current year: {year}. Current month: {month}.\n\n"
         f"You are generating a NEW blog post for the category: {category}\n\n"
-        "ALREADY PUBLISHED TITLES (do NOT repeat or closely resemble these):\n"
+        "RECENTLY PUBLISHED TITLES (avoid similar topics AND similar concepts, not just similar wording):\n"
         + already_published_str + "\n\n"
         "Your job:\n"
-        "1. Pick a fresh, specific personal finance topic for this category that is NOT similar to any already published title.\n"
+        "1. Pick a fresh, specific personal finance topic for this category.\n"
         "2. Write a full blog post for it.\n\n"
         "WRITING RULES:\n"
         "- Start with a hook: a surprising stat, a relatable scenario, or a provocative statement.\n"
@@ -104,7 +157,10 @@ def generate_topic_and_content(published_titles):
         '"html_content": "<h2>...</h2><p>...</p>", "category": "' + category + '"}'
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-flash-latest:generateContent?key={GEMINI_KEY}"
+    )
 
     max_retries = 4
     wait_seconds = 30
@@ -120,29 +176,59 @@ def generate_topic_and_content(published_titles):
         )
 
         if response.status_code == 200:
-            raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            resp_json = response.json()
+            candidates = resp_json.get("candidates", [])
+
+            if not candidates:
+                print(f"Attempt {attempt}: No candidates in response: {resp_json}")
+                if attempt < max_retries:
+                    time.sleep(wait_seconds)
+                    continue
+                raise Exception(f"No candidates after {max_retries} attempts. Last response: {resp_json}")
+
+            raw_text = candidates[0]["content"]["parts"][0]["text"]
             clean = raw_text.replace("```json", "").replace("```", "").strip()
-            result = json.loads(clean)
-            return result
-        elif response.status_code in [503, 429]:
+
+            # Extract JSON even if model adds text around it
+            json_match = re.search(r'\{.*\}', clean, re.DOTALL)
+            if not json_match:
+                print(f"Attempt {attempt}: No JSON found. Raw: {clean[:300]}")
+                if attempt < max_retries:
+                    time.sleep(wait_seconds)
+                    continue
+                raise Exception("No valid JSON found in response after all retries.")
+
+            try:
+                result = json.loads(json_match.group())
+                return result
+            except json.JSONDecodeError as e:
+                print(f"Attempt {attempt}: JSON parse error: {e}. Raw: {clean[:300]}")
+                if attempt < max_retries:
+                    time.sleep(wait_seconds)
+                    continue
+                raise
+
+        elif response.status_code in [429, 503]:
             if attempt < max_retries:
                 print(f"Gemini busy (attempt {attempt}), retrying in {wait_seconds}s...")
                 time.sleep(wait_seconds)
             else:
-                raise Exception(f"Gemini Error after {max_retries} attempts: {response.status_code} - {response.text}")
+                raise Exception(
+                    f"Gemini Error after {max_retries} attempts: {response.status_code} - {response.text}"
+                )
         else:
             raise Exception(f"Gemini Error: {response.status_code} - {response.text}")
 
 
+# ─── Webflow publish ───────────────────────────────────────────────────────────
+
 def post_to_webflow(data, published_list):
     url = f"https://api.webflow.com/v2/collections/{COLLECTION_ID}/items/live"
-
     headers = {
         "Authorization": f"Bearer {WEBFLOW_TOKEN}",
         "accept-version": "2.0.0",
         "content-type": "application/json"
     }
-
     payload = {
         "isArchived": False,
         "isDraft": False,
@@ -165,20 +251,50 @@ def post_to_webflow(data, published_list):
             "date": datetime.utcnow().strftime("%Y-%m-%d")
         })
         save_published(published_list)
-        print(f"Success! {data['title']} is now LIVE.")
+        print(f"Success! '{data['title']}' is now LIVE.")
     else:
         raise Exception(f"Webflow Error: {res.status_code} - {res.text}")
 
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     try:
         published = load_published()
         print(f"DEBUG - Ukupno objavljenih: {len(published)}")
 
-        content = generate_topic_and_content(published)
-        print(f"DEBUG - Generisan naslov: {content['title']}")
+        content = None
+        last_candidate = None
 
+        for gen_attempt in range(1, MAX_GEN_ATTEMPTS + 1):
+            print(f"Generacija pokusaj {gen_attempt}/{MAX_GEN_ATTEMPTS}...")
+            candidate = generate_topic_and_content(published)
+            last_candidate = candidate
+
+            too_similar, similar_to = is_too_similar(candidate["title"])
+
+            if not too_similar:
+                content = candidate
+                print(f"✓ Unikatan naslov pronadjen: {candidate['title']}")
+                break
+            else:
+                print(f"✗ Previše slično sa '{similar_to}', regenerišem...")
+
+        if content is None:
+            # After MAX_GEN_ATTEMPTS, publish anyway — better a near-duplicate than a permanent fail
+            print(f"WARNING: Nije pronadjen unikatan naslov nakon {MAX_GEN_ATTEMPTS} pokusaja.")
+            print(f"Objavljujem poslednji kandidat: {last_candidate['title']}")
+            content = last_candidate
+
+        print(f"DEBUG - Generisan naslov: {content['title']}")
         post_to_webflow(content, published)
+
+        # Save embedding only after successful publish
+        print("Saving embedding...")
+        new_vec = get_embedding(content["title"])
+        save_embedding(content["title"], new_vec)
+        print("Done.")
+
     except Exception as e:
         print(f"Failed: {str(e)}")
         raise
