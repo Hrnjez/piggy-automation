@@ -3,33 +3,28 @@ on:
   schedule:
     - cron: '0 */2 * * *'
   workflow_dispatch:
-
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
       - name: Install dependencies
-        run: pip install requests python-dotenv
-
+        run: pip install requests python-dotenv numpy scikit-learn
       - name: Run blog script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
           WEBFLOW_COLLECTION_ID: ${{ secrets.WEBFLOW_COLLECTION_ID }}
         run: python publish_blog.py
-
       - name: Save published log
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add published_articles.json
+          git add published_articles.json published_embeddings.json
           git commit -m "Update published log [skip ci]" || echo "No changes to commit"
           git push
