@@ -3,10 +3,8 @@ import re
 import time
 import json
 import requests
-import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
-from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
@@ -14,7 +12,6 @@ WEBFLOW_TOKEN = os.getenv("WEBFLOW_API_TOKEN")
 COLLECTION_ID = os.getenv("WEBFLOW_COLLECTION_ID")
 
 PUBLISHED_LOG = "published_articles.json"
-EMBEDDINGS_LOG = "published_embeddings.json"
 
 BRAND_CONTEXT = (
     "Piggy (piggysave.app) is a personal finance brand - think mini-NerdWallet but written like a smart friend texting you advice. "
@@ -43,8 +40,18 @@ CATEGORIES = [
     "Earn",
 ]
 
-SIMILARITY_THRESHOLD = 0.85
+SIMILARITY_THRESHOLD = 0.5
 MAX_GEN_ATTEMPTS = 5
+
+STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "your", "you", "how", "why", "what", "is", "are", "was",
+    "be", "by", "from", "that", "this", "it", "as", "if", "my", "our",
+    "their", "its", "we", "i", "not", "no", "do", "did", "has", "have",
+    "will", "can", "should", "without", "never", "ever", "more", "most",
+    "than", "into", "up", "out", "about", "just", "get", "make", "take",
+    "2026", "2025", "vs", "heres", "actually", "really", "only", "every",
+}
 
 
 # ─── Published log ────────────────────────────────────────────────────────────
@@ -61,51 +68,22 @@ def save_published(published_list):
         json.dump(published_list, f, indent=2)
 
 
-# ─── Embeddings ───────────────────────────────────────────────────────────────
+# ─── Similarity check ─────────────────────────────────────────────────────────
 
-def load_embeddings():
-    if os.path.exists(EMBEDDINGS_LOG):
-        with open(EMBEDDINGS_LOG, "r") as f:
-            return json.load(f)
-    return {}
-
-
-def save_embedding(title, vector):
-    embeddings = load_embeddings()
-    embeddings[title] = vector
-    with open(EMBEDDINGS_LOG, "w") as f:
-        json.dump(embeddings, f)
-
-
-def get_embedding(text):
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"text-embedding-004:embedContent?key={GEMINI_KEY}"
-    )
-    response = requests.post(
-        url,
-        json={"model": "models/text-embedding-004", "content": {"parts": [{"text": text}]}}
-    )
-    if response.status_code == 200:
-        return response.json()["embedding"]["values"]
-    raise Exception(f"Embedding error: {response.status_code} - {response.text}")
-
-
-def is_too_similar(new_title, threshold=SIMILARITY_THRESHOLD):
-    embeddings = load_embeddings()
-    if not embeddings:
+def is_too_similar(new_title, published_list, threshold=SIMILARITY_THRESHOLD):
+    new_words = set(new_title.lower().split()) - STOPWORDS
+    if not new_words:
         return False, None
 
-    new_vec = np.array(get_embedding(new_title)).reshape(1, -1)
-    existing_titles = list(embeddings.keys())
-    existing_vecs = np.array([embeddings[t] for t in existing_titles])
+    for entry in published_list:
+        existing = entry["title"] if isinstance(entry, dict) else entry
+        existing_words = set(existing.lower().split()) - STOPWORDS
+        if not existing_words:
+            continue
+        overlap = len(new_words & existing_words) / max(len(new_words), 1)
+        if overlap > threshold:
+            return True, existing
 
-    similarities = cosine_similarity(new_vec, existing_vecs)[0]
-    max_idx = int(np.argmax(similarities))
-    max_sim = similarities[max_idx]
-
-    if max_sim > threshold:
-        return True, existing_titles[max_idx]
     return False, None
 
 
@@ -128,7 +106,6 @@ def generate_topic_and_content(published_list):
     month = datetime.utcnow().strftime("%B")
     category = pick_category(published_list)
 
-    # Send only the last 80 titles to stay within token limits
     recent_entries = published_list[-80:]
     recent_titles = [
         e["title"] if isinstance(e, dict) else e
@@ -157,10 +134,7 @@ def generate_topic_and_content(published_list):
         '"html_content": "<h2>...</h2><p>...</p>", "category": "' + category + '"}'
     )
 
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-flash-latest:generateContent?key={GEMINI_KEY}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
 
     max_retries = 4
     wait_seconds = 30
@@ -189,7 +163,6 @@ def generate_topic_and_content(published_list):
             raw_text = candidates[0]["content"]["parts"][0]["text"]
             clean = raw_text.replace("```json", "").replace("```", "").strip()
 
-            # Extract JSON even if model adds text around it
             json_match = re.search(r'\{.*\}', clean, re.DOTALL)
             if not json_match:
                 print(f"Attempt {attempt}: No JSON found. Raw: {clean[:300]}")
@@ -271,7 +244,7 @@ if __name__ == "__main__":
             candidate = generate_topic_and_content(published)
             last_candidate = candidate
 
-            too_similar, similar_to = is_too_similar(candidate["title"])
+            too_similar, similar_to = is_too_similar(candidate["title"], published)
 
             if not too_similar:
                 content = candidate
@@ -281,19 +254,12 @@ if __name__ == "__main__":
                 print(f"✗ Previše slično sa '{similar_to}', regenerišem...")
 
         if content is None:
-            # After MAX_GEN_ATTEMPTS, publish anyway — better a near-duplicate than a permanent fail
             print(f"WARNING: Nije pronadjen unikatan naslov nakon {MAX_GEN_ATTEMPTS} pokusaja.")
             print(f"Objavljujem poslednji kandidat: {last_candidate['title']}")
             content = last_candidate
 
         print(f"DEBUG - Generisan naslov: {content['title']}")
         post_to_webflow(content, published)
-
-        # Save embedding only after successful publish
-        print("Saving embedding...")
-        new_vec = get_embedding(content["title"])
-        save_embedding(content["title"], new_vec)
-        print("Done.")
 
     except Exception as e:
         print(f"Failed: {str(e)}")
